@@ -1,19 +1,56 @@
 # Editor Toolbox for Unity (Türkçe)
 
-Unity için modüler, hafif ve yüksek performanslı Inspector genişletme ve üretkenlik kiti. Tip-güvenli varlık seçici, yerinde ScriptableObject editörü ve temel özellik nitelikleriyle editör iş akışınızı hızlandırır.
+Unity için modüler, hafif ve yüksek performanslı Inspector geliştirme ve üretkenlik kiti. Akıllı bileşen/arayüz filtreli prefab seçici, yerinde ScriptableObject editörü ve temel özellik nitelikleriyle editör iş akışınızı hızlandırır.
 
 ---
 
-## ✨ Öne Çıkan Özellikler
+## ✨ Öne Çıkan Yetenekler ve Gerçek Kullanım Senaryoları
 
-### 1. 🔍 Varlık ve Referans Seçici (`[Find]`)
+### 1. 🔍 Akıllı Varlık, Prefab ve Arayüz Seçici (`[Find]`)
 Upuzun proje klasörlerinde kaybolmaya veya karmaşık pencereler arasında sürükleyip bırakmaya son:
-- **`[Find]` Niteliği**: `UnityEngine.Object`, `ScriptableObject`, `Component` veya `GameObject` alanlarını işaretler.
-- **Gelişmiş Arama Penceresi (`FindPickerWindow`)**:
-  - Türkçe ve özel karakter normalizasyonu ile canlı filtreleme (örn. 'ı'/'i' ayrımı yapmadan hızlı arama).
-  - Sekmeli yapı: **Sahne Nesneleri (Scene)**, **Prefablar (Prefabs)** ve **Proje Varlıkları (Assets)**.
-  - Sürükle & Bırak ve çift tıklamayla Project/Hierarchy üzerinde nesneye odaklanma (Ping/Focus).
-  - Klavye desteği (Ok tuşları ve Enter).
+
+- **Bileşen veya Arayüze (Interface) Sahip Prefabları Filtreleme (`GameObject` Saklama):**
+  Inspector'da `GameObject` olarak bir prefab atamak istiyorsunuz, ancak **yalnızca üzerinde belirli bir bileşen veya interface (`IInteractable`, `Health`, vb.) olan prefab'ların seçilebilmesini** mi istiyorsunuz?
+  ```csharp
+  // Arama penceresi yalnızca üzerinde IInteractable olan prefabları listeler!
+  [Find(typeof(IInteractable), Source = FindSource.Prefabs)]
+  public GameObject interactablePrefab;
+
+  // Yalnızca DamageDealer bileşeni bulunan prefabları listeler
+  [Find(typeof(DamageDealer), Source = FindSource.Prefabs)]
+  public GameObject weaponPrefab;
+  ```
+
+- **Prefab veya Sahneden Doğrudan Bileşen (`Component`) Seçip Alma:**
+  `GameObject` alıp runtime'da `GetComponent` çağırmak yerine, doğrudan prefab'ın üzerindeki bileşeni değişkene bağlayın:
+  ```csharp
+  // Sahne ve prefabları tarar, üzerindeki NavMeshAgent bileşenini doğrudan bağlar
+  [Find(Source = FindSource.Prefabs | FindSource.Scene)]
+  public NavMeshAgent agentTemplate;
+  ```
+
+- **Arayüz (Interface) Sözleşmesi Zorlama:**
+  Unity saf C# arayüzlerini serileştiremez. `UnityEngine.Object` ve `[Find]` ile Inspector seviyesinde arayüz desteği sağlayabilirsiniz:
+  ```csharp
+  [Find(typeof(IItemPickup))]
+  public UnityEngine.Object itemPickup;
+
+  public IItemPickup Item => itemPickup as IItemPickup;
+  ```
+
+- **ScriptableObject ve Varlık Seçimi:**
+  ```csharp
+  [Find(typeof(BuildingDef), Source = FindSource.Assets)]
+  public BuildingDef targetBuilding;
+  ```
+
+- **Gelişmiş Arama Penceresi (`FindPickerWindow`):**
+  - **Sekmeler:** Sahne Nesneleri (Scene), Prefablar (Prefabs) ve Varlıklar (Assets).
+  - **Canlı Arama:** Türkçe ve aksanlı karakterleri normalleştirerek hızlı arama (örn. `ı`/`i`, `ş`/`s`).
+  - **Sürükle & Bırak:** Uygun nesneyi veya bileşeni otomatik ayıklar ve bağlar.
+  - **Odaklanma (Ping/Focus):** Tek tıkla Hierarchy/Project'te gösterir, çift tıkla Scene görünümünde odaklar.
+
+---
 
 ### 2. 📝 Yerinde ScriptableObject Düzenleme (`[Inline]`)
 ScriptableObject alanlarını başka pencereye gitmeden doğrudan mevcut Inspector içinde açın ve düzenleyin.
@@ -21,6 +58,8 @@ ScriptableObject alanlarını başka pencereye gitmeden doğrudan mevcut Inspect
 - **Döngüsel Referans Koruması**: İç içe geçmiş nesnelerin birbirini referans vermesi durumunda sonsuz döngüyü ve editör kilitlenmesini engeller.
 - **`[InlineReadOnly]`**: Inline panelinde alanın sadece okunabilir (gri/disabled) gösterilmesini sağlar.
 - **`[InlineIgnore]`**: Belirli alanların inline görünümünde gizlenmesini sağlar.
+
+---
 
 ### 3. 🔒 Inspector Yardımcı Nitelikleri
 - **`[ReadOnlyField]`**: Alanları Inspector üzerinde gri (düzenlenemez) gösterir. Serileştirmeyi bozmaz ve `Unity.Collections.ReadOnly` ile isim çakışması yaşamaz.
@@ -32,32 +71,37 @@ ScriptableObject alanlarını başka pencereye gitmeden doğrudan mevcut Inspect
 ### Unity Package Manager (Git URL)
 1. Unity'de **Window > Package Manager** penceresini açın.
 2. **+** butonuna basıp **Add package from git URL...** seçeneğini seçin.
-3. Şu adresi yapıştırın:
+3. Adresi yapıştırın:
    ```text
    https://github.com/ChasingImagines/EditorToolbox.git
    ```
 
 ---
 
-## 🚀 Örnek Kullanım
+## 🚀 Kapsamlı Örnek
 
 ```csharp
 using UnityEngine;
+using UnityEngine.AI;
 using Yasin.EditorToolbox;
 
-public class BuildingManager : MonoBehaviour
+public class SpawnerExample : MonoBehaviour
 {
-    [Header("Referans Arama")]
-    [Find(typeof(BuildingDef), Source = FindSource.Assets)]
-    public BuildingDef selectedBuilding;
+    [Header("1. Arayüze göre Prefab Filtreleme (GameObject saklar)")]
+    [Find(typeof(IEnemy), Source = FindSource.Prefabs)]
+    public GameObject enemyPrefab;
 
-    [Header("Yerinde Düzenleme")]
+    [Header("2. Prefab/Sahneden Doğrudan Bileşen Bağlama")]
+    [Find(Source = FindSource.Prefabs | FindSource.Scene)]
+    public NavMeshAgent agentReference;
+
+    [Header("3. ScriptableObject Yerinde Düzenleme")]
     [Inline]
-    public BuildingSettings defaultSettings;
+    public EnemyStatsSO enemyStats;
 
-    [Header("Bilgi")]
+    [Header("4. Salt-Okunur Bilgi Alanı")]
     [ReadOnlyField]
-    public int activeWorkersCount = 5;
+    public int currentSpawnCount = 0;
 }
 ```
 

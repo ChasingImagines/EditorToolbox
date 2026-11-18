@@ -1,25 +1,61 @@
 # Editor Toolbox for Unity
 
-[![openupm](https://img.shields.io/npm/v/com.yasin.editortoolbox?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.yasin.editortoolbox/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 [![Unity 2021.3+](https://img.shields.io/badge/unity-2021.3%2B-blue.svg)](https://unity.com/)
 
-A modular, lightweight, high-performance Inspector enhancement toolkit for Unity. It supercharges your editor workflow with type-safe asset finders, in-place ScriptableObject inline editors, and essential custom attributes—**zero bloat, zero dependencies**.
+A modular, lightweight, high-performance Inspector enhancement toolkit for Unity. It supercharges your editor workflow with type-safe asset/prefab finders, interface & component pickers, in-place ScriptableObject inline editors, and essential custom attributes—**zero bloat, zero dependencies**.
 
 [🇹🇷 Türkçe Dokümantasyon için buraya tıklayın (README.tr.md)](README.tr.md)
 
 ---
 
-## ✨ Key Features
+## ✨ Key Features & Real-World Use Cases
 
-### 1. 🔍 Asset & Reference Finder (`[Find]`)
-Say goodbye to scrolling through endless asset lists or dragging items across inspector panes.
-- **`[Find]` Attribute**: Decorate any `UnityEngine.Object`, `ScriptableObject`, `Component`, or `GameObject` field.
-- **Rich Search Window (`FindPickerWindow`)**:
-  - Live filtering with Turkish/diacritic character normalization.
-  - Tabbed browsing: **Scene Objects**, **Prefabs**, and **Assets**.
-  - Type-safe drag & drop area and double-click to ping/focus in Project or Hierarchy.
-  - Keyboard navigation (Arrow keys + Enter).
+### 1. 🔍 Smart Asset, Prefab & Interface Finder (`[Find]`)
+Never lose time dragging objects across nested inspector windows or digging through folders.
+
+- **Filter Prefabs by Component or Interface (Storing GameObject):**
+  Want a `GameObject` slot in Inspector, but only want users to pick prefabs that implement `IInteractable` or have a `Health` component?
+  ```csharp
+  // Only prefabs/objects with IInteractable are shown in the search window!
+  [Find(typeof(IInteractable), Source = FindSource.Prefabs)]
+  public GameObject interactablePrefab;
+
+  // Only prefabs with DamageDealer component
+  [Find(typeof(DamageDealer), Source = FindSource.Prefabs)]
+  public GameObject weaponPrefab;
+  ```
+
+- **Pick Specific Components Directly from Prefabs or Scene:**
+  Instead of getting a GameObject and calling `GetComponent` at runtime, pick and bind the `Component` directly:
+  ```csharp
+  // Automatically inspects prefabs/scene, extracts NavMeshAgent, and binds the component
+  [Find(Source = FindSource.Prefabs | FindSource.Scene)]
+  public NavMeshAgent agentTemplate;
+  ```
+
+- **Interface Reference Support:**
+  Unity cannot natively serialize pure C# interfaces. With `UnityEngine.Object` and `[Find]`, you can enforce interface contracts in the editor:
+  ```csharp
+  [Find(typeof(IItemPickup))]
+  public UnityEngine.Object itemPickup;
+
+  public IItemPickup Item => itemPickup as IItemPickup;
+  ```
+
+- **ScriptableObjects & Assets:**
+  ```csharp
+  [Find(typeof(BuildingDef), Source = FindSource.Assets)]
+  public BuildingDef targetBuilding;
+  ```
+
+- **Rich Picker Window (`FindPickerWindow`):**
+  - **Tabs**: Scene Objects, Prefabs, and Assets.
+  - **Live Search**: Normalized search ignoring accents/Turkish diacritics (e.g. `ı`/`i`, `ö`/`o`).
+  - **Drag & Drop**: Automatically validates and extracts required component when dropped.
+  - **Ping & Frame**: Single click pings in Project/Hierarchy, double-click focuses in Scene view or opens asset.
+
+---
 
 ### 2. 📝 In-Place ScriptableObject Editor (`[Inline]`)
 Edit nested ScriptableObjects directly within the parent Inspector without opening separate windows.
@@ -27,6 +63,8 @@ Edit nested ScriptableObjects directly within the parent Inspector without openi
 - **Recursion-Safe**: Built-in circular reference guards prevent editor freezes or infinite loops.
 - **`[InlineReadOnly]`**: Mark fields that should be displayed as disabled inside the inline view.
 - **`[InlineIgnore]`**: Hide internal or boilerplate fields from the inline view.
+
+---
 
 ### 3. 🔒 Custom Property Attributes
 - **`[ReadOnlyField]`**: Mark fields as read-only / disabled in the Inspector while keeping them serialized. (Conflict-free name that avoids collisions with `Unity.Collections.ReadOnly`).
@@ -56,28 +94,30 @@ Add the package to your `Packages/manifest.json`:
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Complete Example
 
 ```csharp
 using UnityEngine;
+using UnityEngine.AI;
 using Yasin.EditorToolbox;
 
-public class QuestGiver : MonoBehaviour
+public class SpawnerExample : MonoBehaviour
 {
-    [Header("Asset Search & Filter")]
-    [Find(typeof(AudioClip), Source = FindSource.Assets)]
-    public AudioClip greetingSound;
+    [Header("1. Filter Prefab by Interface (stores GameObject)")]
+    [Find(typeof(IEnemy), Source = FindSource.Prefabs)]
+    public GameObject enemyPrefab;
 
-    [Find(FindSource.Scene)]
-    public Transform questTarget;
+    [Header("2. Bind Component directly from Prefab/Scene")]
+    [Find(Source = FindSource.Prefabs | FindSource.Scene)]
+    public NavMeshAgent agentReference;
 
-    [Header("Inline ScriptableObject")]
+    [Header("3. ScriptableObject In-Place Editing")]
     [Inline]
-    public QuestDefinition questDef;
+    public EnemyStatsSO enemyStats;
 
-    [Header("Read Only")]
+    [Header("4. Read-Only Field")]
     [ReadOnlyField]
-    public string uniqueSessionId = "QS-10029";
+    public int currentSpawnCount = 0;
 }
 ```
 

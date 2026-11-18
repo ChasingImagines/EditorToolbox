@@ -391,15 +391,30 @@ namespace Yasin.EditorToolbox.Editor
 
         private void CollectAssets()
         {
-            var guids = AssetDatabase.FindAssets("t:ScriptableObject");
+            Type targetType = _attr.RequiredType ?? _fieldType;
+            string filter = "t:ScriptableObject";
+
+            if (targetType != null && targetType != typeof(UnityEngine.Object))
+            {
+                if (typeof(ScriptableObject).IsAssignableFrom(targetType))
+                    filter = $"t:{targetType.Name}";
+                else if (typeof(AudioClip).IsAssignableFrom(targetType))
+                    filter = "t:AudioClip";
+                else if (typeof(Texture).IsAssignableFrom(targetType))
+                    filter = "t:Texture";
+                else if (typeof(Material).IsAssignableFrom(targetType))
+                    filter = "t:Material";
+            }
+
+            var guids = AssetDatabase.FindAssets(filter);
             foreach (var g in guids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(g);
-                var so = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
-                if (so == null) continue;
+                var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                if (asset == null) continue;
 
-                if (IsCompatible(so, _fieldType, _attr.RequiredType))
-                    _assets.Add(so);
+                if (IsCompatible(asset, _fieldType, _attr.RequiredType))
+                    _assets.Add(asset);
             }
         }
 

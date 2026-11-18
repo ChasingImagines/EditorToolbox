@@ -330,9 +330,13 @@ namespace Yasin.EditorToolbox.Editor
 
             if (fieldType == typeof(UnityEngine.Object))
             {
-                if (requiredType != null && typeof(Component).IsAssignableFrom(requiredType))
+                if (requiredType != null && (typeof(Component).IsAssignableFrom(requiredType) || requiredType.IsInterface))
                 {
-                    return go != null ? go.GetComponent(requiredType) : null;
+                    if (go != null)
+                    {
+                        var comp = go.GetComponent(requiredType);
+                        if (comp != null) return comp;
+                    }
                 }
 
                 if (requiredType == null || requiredType.IsAssignableFrom(picked.GetType()))
