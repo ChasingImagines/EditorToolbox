@@ -253,7 +253,7 @@ namespace Yasin.EditorToolbox.Editor
             UnityEngine.Object accepted = null;
             foreach (var dragged in refs)
             {
-                var normalized = NormalizeForField(dragged, fieldType, attr.RequiredType, attr.IncludeChildren);
+                var normalized = NormalizeForField(dragged, fieldType, attr.RequiredType);
                 if (normalized != null && IsValid(normalized, attr))
                 {
                     accepted = normalized;
@@ -290,7 +290,7 @@ namespace Yasin.EditorToolbox.Editor
             return PassesSourceFilter(obj, attr.Source) && MatchesRequiredType(obj, attr.RequiredType);
         }
 
-        public static UnityEngine.Object NormalizeForField(UnityEngine.Object picked, Type fieldType, Type requiredType, bool includeChildren = false)
+        public static UnityEngine.Object NormalizeForField(UnityEngine.Object picked, Type fieldType, Type requiredType)
         {
             if (picked == null) return null;
 
@@ -300,9 +300,6 @@ namespace Yasin.EditorToolbox.Editor
             {
                 if (go == null) return null;
                 var comp = go.GetComponent(fieldType);
-                if (comp == null && includeChildren)
-                    comp = go.GetComponentInChildren(fieldType, true);
-
                 if (comp == null) return null;
 
                 if (requiredType == null || requiredType.IsAssignableFrom(comp.GetType()))
@@ -319,9 +316,6 @@ namespace Yasin.EditorToolbox.Editor
                     return go;
 
                 var comp = go.GetComponent(requiredType);
-                if (comp == null && includeChildren)
-                    comp = go.GetComponentInChildren(requiredType, true);
-
                 return comp != null ? go : null;
             }
 
@@ -342,9 +336,6 @@ namespace Yasin.EditorToolbox.Editor
                     if (go != null)
                     {
                         var comp = go.GetComponent(requiredType);
-                        if (comp == null && includeChildren)
-                            comp = go.GetComponentInChildren(requiredType, true);
-
                         if (comp != null) return comp;
                     }
                 }
