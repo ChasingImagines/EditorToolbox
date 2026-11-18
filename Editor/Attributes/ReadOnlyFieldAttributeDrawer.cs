@@ -6,7 +6,7 @@ using Yasin.EditorToolbox;
 namespace Yasin.EditorToolbox.Editor
 {
     /// <summary>
-    /// [ReadOnlyField] alanları Inspector'da gri (düzenlenemez / disabled) olarak çizer.
+    /// Custom property drawer for [ReadOnlyField], rendering the field disabled in the Inspector.
     /// </summary>
     [CustomPropertyDrawer(typeof(ReadOnlyFieldAttribute))]
     public sealed class ReadOnlyFieldAttributeDrawer : PropertyDrawer

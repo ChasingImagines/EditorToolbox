@@ -7,8 +7,8 @@ using Yasin.EditorToolbox;
 namespace Yasin.EditorToolbox.Editor
 {
     /// <summary>
-    /// [Inline] niteliği için CustomPropertyDrawer.
-    /// ScriptableObject alanlarının yanına katlanabilir (foldout) ok ekler ve açıkken içeriği yerinde çizer.
+    /// Custom property drawer for [Inline] attribute.
+    /// Draws a foldout arrow next to ScriptableObject fields and displays their serialized properties in-place.
     /// </summary>
     [CustomPropertyDrawer(typeof(InlineAttribute))]
     public sealed class InlinePropertyDrawer : PropertyDrawer

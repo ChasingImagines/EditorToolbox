@@ -4,9 +4,9 @@ using UnityEngine;
 namespace Yasin.EditorToolbox
 {
     /// <summary>
-    /// Tip-güvenli nesne referansı seçici niteliği ([Find]).
-    /// UnityEngine.Object, ScriptableObject, Prefab veya Component referansları için
-    /// zengin arama penceresi (FindPickerWindow), drag & drop ve isteğe bağlı yerinde düzenleme (Inline) sunar.
+    /// Type-safe object reference selector attribute ([Find]).
+    /// Provides rich search picker window (FindPickerWindow), drag &amp; drop, component/interface extraction,
+    /// and optional in-place editing (Inline) for UnityEngine.Object, ScriptableObject, Prefab, or Component references.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
     public sealed class FindAttribute : PropertyAttribute

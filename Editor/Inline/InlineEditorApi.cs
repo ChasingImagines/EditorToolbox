@@ -9,9 +9,8 @@ using Yasin.EditorToolbox;
 namespace Yasin.EditorToolbox.Editor
 {
     /// <summary>
-    /// [Inline] niteliğiyle işaretlenen ScriptableObject alanlarını yerinde (in-place)
-    /// çizmek ve yüksekliğini hesaplamak için yardımcı API.
-    /// Döngüsel referans (recursion) korumalıdır.
+    /// Helper API for rendering and calculating dimensions of in-place ScriptableObject fields marked with [Inline].
+    /// Features circular reference (recursion) protection.
     /// </summary>
     public static class InlineEditorApi
     {
@@ -50,7 +49,7 @@ namespace Yasin.EditorToolbox.Editor
             int targetId = target.GetInstanceID();
             if (VisitedObjects.Contains(targetId) || VisitedObjects.Count >= 2)
             {
-                return EditorGUIUtility.singleLineHeight; // Döngüsel koruma uyarısı satırı
+                return EditorGUIUtility.singleLineHeight; // Circular reference warning height
             }
 
             VisitedObjects.Add(targetId);
@@ -91,7 +90,7 @@ namespace Yasin.EditorToolbox.Editor
             int targetId = target.GetInstanceID();
             if (VisitedObjects.Contains(targetId) || VisitedObjects.Count >= 2)
             {
-                EditorGUI.HelpBox(new Rect(rect.x, rect.y, rect.width, EditorGUIUtility.singleLineHeight), "[Döngüsel Referans Engellendi]", MessageType.Info);
+                EditorGUI.HelpBox(new Rect(rect.x, rect.y, rect.width, EditorGUIUtility.singleLineHeight), "[Circular Reference Prevented]", MessageType.Info);
                 return;
             }
 
@@ -102,7 +101,7 @@ namespace Yasin.EditorToolbox.Editor
 
                 var iterator = so.GetIterator();
                 bool enterChildren = true;
-                float y = rect.y;
+                float currentY = rect.y;
 
                 while (iterator.NextVisible(enterChildren))
                 {
@@ -113,21 +112,28 @@ namespace Yasin.EditorToolbox.Editor
 
                     if (HasHeaderAttribute(iterator, out string headerText))
                     {
-                        var headerRect = new Rect(rect.x, y, rect.width, EditorGUIUtility.singleLineHeight);
+                        var headerRect = new Rect(rect.x, currentY, rect.width, EditorGUIUtility.singleLineHeight);
                         EditorGUI.LabelField(headerRect, headerText, EditorStyles.boldLabel);
-                        y += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+                        currentY += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
                     }
 
-                    float h = EditorGUI.GetPropertyHeight(iterator, true);
-                    var row = new Rect(rect.x, y, rect.width, h);
+                    float height = EditorGUI.GetPropertyHeight(iterator, true);
+                    var propertyRect = new Rect(rect.x, currentY, rect.width, height);
 
                     bool readOnly = IsReadOnly(iterator);
-                    using (new EditorGUI.DisabledScope(readOnly))
+                    if (readOnly)
                     {
-                        EditorGUI.PropertyField(row, iterator, new GUIContent(iterator.displayName), true);
+                        using (new EditorGUI.DisabledScope(true))
+                        {
+                            EditorGUI.PropertyField(propertyRect, iterator, true);
+                        }
+                    }
+                    else
+                    {
+                        EditorGUI.PropertyField(propertyRect, iterator, true);
                     }
 
-                    y += h + EditorGUIUtility.standardVerticalSpacing;
+                    currentY += height + EditorGUIUtility.standardVerticalSpacing;
                 }
 
                 so.ApplyModifiedProperties();
@@ -141,15 +147,18 @@ namespace Yasin.EditorToolbox.Editor
         private static bool HasHeaderAttribute(SerializedProperty property, out string headerText)
         {
             headerText = string.Empty;
+            if (property == null) return false;
+
             var fieldInfo = GetFieldInfoFromProperty(property);
             if (fieldInfo == null) return false;
 
-            var headerAttr = (HeaderAttribute)Attribute.GetCustomAttribute(fieldInfo, typeof(HeaderAttribute));
-            if (headerAttr != null)
+            var attr = fieldInfo.GetCustomAttribute<HeaderAttribute>(true);
+            if (attr != null)
             {
-                headerText = headerAttr.header;
+                headerText = attr.header;
                 return true;
             }
+
             return false;
         }
 
@@ -157,89 +166,54 @@ namespace Yasin.EditorToolbox.Editor
         {
             if (property == null) return null;
 
-            object currentObject = property.serializedObject.targetObject;
-            if (currentObject == null) return null;
+            Type parentType = property.serializedObject.targetObject.GetType();
+            string[] parts = property.propertyPath.Replace(".Array.data[", "[").Split('.');
 
-            Type currentType = currentObject.GetType();
-            FieldInfo fieldInfo = null;
+            FieldInfo currentField = null;
+            Type currentType = parentType;
 
-            string path = property.propertyPath.Replace(".Array.data[", "[");
-            string[] elements = path.Split('.');
-
-            foreach (var element in elements)
+            for (int i = 0; i < parts.Length; i++)
             {
-                if (element.Contains("["))
+                string part = parts[i];
+                if (part.Contains("["))
                 {
-                    string elementName = element.Substring(0, element.IndexOf('['));
-                    fieldInfo = GetFieldInTypeHierarchy(currentType, elementName);
-                    if (fieldInfo == null) return null;
+                    string fieldName = part.Substring(0, part.IndexOf('['));
+                    currentField = GetFieldFromTypeHierarchy(currentType, fieldName);
+                    if (currentField == null) return null;
 
-                    if (currentObject != null)
-                    {
-                        currentObject = fieldInfo.GetValue(currentObject);
-                        int index = GetArrayIndex(element);
-                        if (currentObject is System.Collections.IList list && index >= 0 && index < list.Count)
-                        {
-                            currentObject = list[index];
-                            currentType = currentObject != null ? currentObject.GetType() : GetElementType(fieldInfo.FieldType);
-                        }
-                        else
-                        {
-                            currentType = GetElementType(fieldInfo.FieldType);
-                            currentObject = null;
-                        }
-                    }
-                    else
-                    {
-                        currentType = GetElementType(fieldInfo.FieldType);
-                    }
+                    currentType = GetElementOrGenericType(currentField.FieldType);
                 }
                 else
                 {
-                    fieldInfo = GetFieldInTypeHierarchy(currentType, element);
-                    if (fieldInfo == null) return null;
+                    currentField = GetFieldFromTypeHierarchy(currentType, part);
+                    if (currentField == null) return null;
 
-                    if (currentObject != null)
-                    {
-                        currentObject = fieldInfo.GetValue(currentObject);
-                        currentType = currentObject != null ? currentObject.GetType() : fieldInfo.FieldType;
-                    }
-                    else
-                    {
-                        currentType = fieldInfo.FieldType;
-                    }
+                    currentType = currentField.FieldType;
                 }
             }
 
-            return fieldInfo;
+            return currentField;
         }
 
-        private static FieldInfo GetFieldInTypeHierarchy(Type type, string fieldName)
+        private static FieldInfo GetFieldFromTypeHierarchy(Type type, string fieldName)
         {
-            var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
             while (type != null && type != typeof(object))
             {
-                var field = type.GetField(fieldName, flags);
+                var field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
                 if (field != null) return field;
                 type = type.BaseType;
             }
             return null;
         }
 
-        private static int GetArrayIndex(string element)
-        {
-            int start = element.IndexOf('[');
-            int end = element.IndexOf(']');
-            if (start != -1 && end != -1 && int.TryParse(element.Substring(start + 1, end - start - 1), out int index))
-                return index;
-            return -1;
-        }
-
-        private static Type GetElementType(Type type)
+        private static Type GetElementOrGenericType(Type type)
         {
             if (type.IsArray) return type.GetElementType();
-            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(System.Collections.Generic.List<>))
-                return type.GetGenericArguments()[0];
+            if (type.IsGenericType && typeof(IEnumerable<>).IsAssignableFrom(type.GetGenericTypeDefinition()))
+            {
+                var args = type.GetGenericArguments();
+                if (args.Length > 0) return args[0];
+            }
             return type;
         }
     }

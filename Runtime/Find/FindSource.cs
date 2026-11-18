@@ -3,7 +3,7 @@ using System;
 namespace Yasin.EditorToolbox
 {
     /// <summary>
-    /// [Find] niteliği için arama kaynakları (Scene, Prefabs, Assets).
+    /// Search sources for [Find] attribute (Scene, Prefabs, Assets).
     /// </summary>
     [Flags]
     public enum FindSource

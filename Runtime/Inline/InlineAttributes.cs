@@ -4,8 +4,7 @@ using UnityEngine;
 namespace Yasin.EditorToolbox
 {
     /// <summary>
-    /// ScriptableObject referansını Inspector'da ayrı pencereye gitmeden
-    /// yerinde (in-place) katlanabilir alan olarak düzenlemek için kullanılır ([Inline]).
+    /// Displays and edits ScriptableObject references in-place within the Inspector ([Inline]).
     /// </summary>
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
     public sealed class InlineAttribute : PropertyAttribute
@@ -19,7 +18,7 @@ namespace Yasin.EditorToolbox
     }
 
     /// <summary>
-    /// [Inline] çiziminde sadece okunur (disabled) gösterilecek alanları işaretler.
+    /// Marks fields that should be rendered as read-only (disabled) inside [Inline] view.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
     public sealed class InlineReadOnlyAttribute : PropertyAttribute
@@ -27,7 +26,7 @@ namespace Yasin.EditorToolbox
     }
 
     /// <summary>
-    /// [Inline] çiziminde Inspector'da gizlenecek alanları işaretler.
+    /// Marks fields that should be hidden inside [Inline] view.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
     public sealed class InlineIgnoreAttribute : PropertyAttribute

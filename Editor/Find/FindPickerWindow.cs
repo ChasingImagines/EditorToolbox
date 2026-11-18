@@ -9,8 +9,8 @@ using Yasin.EditorToolbox;
 namespace Yasin.EditorToolbox.Editor
 {
     /// <summary>
-    /// [Find] niteliği için zengin arama ve seçim penceresi (FindPickerWindow).
-    /// Canlı filtreleme, sekmeler (Sahne, Prefablar, Assetler), Türkçe karakter normalizasyonu ve klavye desteği sunar.
+    /// Rich picker and search window for [Find] attribute.
+    /// Features live filtering, tabs (Scene, Prefabs, Assets), diacritic/Turkish character normalization, and keyboard navigation.
     /// </summary>
     public sealed class FindPickerWindow : EditorWindow
     {
@@ -32,14 +32,15 @@ namespace Yasin.EditorToolbox.Editor
         public static void Open(SerializedProperty property, Type fieldType, FindAttribute attr)
         {
             var w = CreateInstance<FindPickerWindow>();
-            w.titleContent = new GUIContent("Varlık / Referans Seçici", EditorGUIUtility.IconContent("Search Icon")?.image);
+            w.titleContent = new GUIContent("Asset / Reference Picker", EditorGUIUtility.IconContent("Search Icon")?.image);
             w._serializedObject = property.serializedObject;
             w._propertyPath = property.propertyPath;
             w._fieldType = fieldType;
             w._attr = attr;
-            w.minSize = new Vector2(440, 420);
+
+            w.minSize = new Vector2(360, 420);
             w.Refresh();
-            w.ShowUtility();
+            w.ShowAuxWindow();
         }
 
         private void OnGUI()
@@ -50,16 +51,16 @@ namespace Yasin.EditorToolbox.Editor
                 return;
             }
 
-            HandleKeyboardEvents();
+            HandleKeyboard();
 
             DrawHeader();
             DrawTabs();
             DrawList();
         }
 
-        private void HandleKeyboardEvents()
+        private void HandleKeyboard()
         {
-            Event e = Event.current;
+            var e = Event.current;
             if (e.type != EventType.KeyDown) return;
 
             if (e.keyCode == KeyCode.Escape)
@@ -118,7 +119,7 @@ namespace Yasin.EditorToolbox.Editor
                     _selectedIndex = 0;
                 }
 
-                if (GUILayout.Button("Yenile", GUILayout.Width(70)))
+                if (GUILayout.Button("Refresh", GUILayout.Width(70)))
                 {
                     Refresh();
                 }
@@ -128,9 +129,9 @@ namespace Yasin.EditorToolbox.Editor
 
             using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
             {
-                GUILayout.Label($"Gereken Tip: {_attr.RequiredType?.Name ?? _fieldType.Name}", EditorStyles.miniLabel);
+                GUILayout.Label($"Required Type: {_attr.RequiredType?.Name ?? _fieldType.Name}", EditorStyles.miniLabel);
                 GUILayout.FlexibleSpace();
-                GUILayout.Label($"Kaynak: {_attr.Source}", EditorStyles.miniLabel);
+                GUILayout.Label($"Source: {_attr.Source}", EditorStyles.miniLabel);
             }
 
             EditorGUILayout.Space(4);
@@ -139,13 +140,13 @@ namespace Yasin.EditorToolbox.Editor
         private void DrawTabs()
         {
             var tabs = new List<string>();
-            if (Allow(FindSource.Scene)) tabs.Add($"Sahne ({_scene.Count})");
-            if (Allow(FindSource.Prefabs)) tabs.Add($"Prefablar ({_prefabs.Count})");
-            if (Allow(FindSource.Assets)) tabs.Add($"Assetler ({_assets.Count})");
+            if (Allow(FindSource.Scene)) tabs.Add($"Scene ({_scene.Count})");
+            if (Allow(FindSource.Prefabs)) tabs.Add($"Prefabs ({_prefabs.Count})");
+            if (Allow(FindSource.Assets)) tabs.Add($"Assets ({_assets.Count})");
 
             if (tabs.Count == 0)
             {
-                EditorGUILayout.HelpBox("FindAttribute.Source içinde hiçbir kaynak etkinleştirilmemiş.", MessageType.Warning);
+                EditorGUILayout.HelpBox("No search sources enabled in FindAttribute.Source.", MessageType.Warning);
                 return;
             }
 
@@ -182,9 +183,9 @@ namespace Yasin.EditorToolbox.Editor
                 padding = new RectOffset(8, 8, 0, 0)
             };
 
-            // Referansı Temizle Butonu
+            // Clear Reference Button
             GUI.backgroundColor = new Color(0.95f, 0.4f, 0.4f, 0.35f);
-            if (GUILayout.Button("∅ Seçimi Temizle (None)", rowStyle))
+            if (GUILayout.Button("∅ Clear Selection (None)", rowStyle))
             {
                 Assign(null);
                 Close();

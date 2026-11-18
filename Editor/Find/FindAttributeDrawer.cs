@@ -8,8 +8,8 @@ using Yasin.EditorToolbox;
 namespace Yasin.EditorToolbox.Editor
 {
     /// <summary>
-    /// [Find] niteliği için CustomPropertyDrawer.
-    /// Tip-güvenli nesne seçici, drag & drop, ping/focus ve opsiyonel inline düzenleme desteği sunar.
+    /// CustomPropertyDrawer for [Find] attribute.
+    /// Provides type-safe object/component picking, drag &amp; drop, ping/focus, and optional inline editing.
     /// </summary>
     [CustomPropertyDrawer(typeof(FindAttribute))]
     public sealed class FindAttributeDrawer : PropertyDrawer
@@ -25,13 +25,13 @@ namespace Yasin.EditorToolbox.Editor
 
             if (property.propertyType != SerializedPropertyType.ObjectReference)
             {
-                EditorGUI.HelpBox(position, "[Find] niteliği yalnızca UnityEngine.Object referans alanlarını destekler.", MessageType.Error);
+                EditorGUI.HelpBox(position, "[Find] attribute only supports UnityEngine.Object reference fields.", MessageType.Error);
                 return;
             }
 
             EditorGUI.BeginProperty(position, label, property);
 
-            // Ana satır
+            // Main line
             var line = new Rect(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
             var content = EditorGUI.PrefixLabel(line, label);
 
@@ -47,7 +47,7 @@ namespace Yasin.EditorToolbox.Editor
             // Focus / Ping
             HandleFocusClick(fieldRect, property.objectReferenceValue);
 
-            // Seçici (Picker Window)
+            // Picker Window Button
             GUIContent searchIcon = EditorGUIUtility.IconContent("d_Search Icon");
             if (searchIcon == null || searchIcon.image == null)
                 searchIcon = EditorGUIUtility.IconContent("Search Icon");
@@ -59,7 +59,7 @@ namespace Yasin.EditorToolbox.Editor
 
             float y = line.yMax;
 
-            // Tip uyumsuzluğu uyarısı
+            // Incompatible type warning
             var assigned = property.objectReferenceValue;
             bool invalidAssigned = assigned != null && !IsValid(assigned, attr);
             if (invalidAssigned && attr.WarnIfAssignedValueInvalid)
@@ -72,7 +72,7 @@ namespace Yasin.EditorToolbox.Editor
                 );
                 EditorGUI.HelpBox(
                     warnRect,
-                    $"Uyumsuz referans: Gereken '{attr.RequiredType?.Name ?? resolvedFieldType.Name}', Kaynak: {attr.Source}",
+                    $"Incompatible reference: Expected '{attr.RequiredType?.Name ?? resolvedFieldType.Name}', Source: {attr.Source}",
                     MessageType.Warning
                 );
                 y = warnRect.yMax;
@@ -89,7 +89,7 @@ namespace Yasin.EditorToolbox.Editor
                 );
 
                 bool expanded = GetInlineExpanded(property);
-                expanded = EditorGUI.Foldout(foldRect, expanded, "İçerik (Inline)", true);
+                expanded = EditorGUI.Foldout(foldRect, expanded, "Content (Inline)", true);
                 SetInlineExpanded(property, expanded);
 
                 y += EditorGUIUtility.singleLineHeight;
@@ -183,7 +183,7 @@ namespace Yasin.EditorToolbox.Editor
 
             if (value == null)
             {
-                text = "Yok (Seçilmedi)";
+                text = "None (Not assigned)";
             }
             else
             {
@@ -299,7 +299,7 @@ namespace Yasin.EditorToolbox.Editor
             if (typeof(Component).IsAssignableFrom(fieldType))
             {
                 if (go == null) return null;
-                var comp = go.GetComponent(fieldType);
+                var comp = go.GetComponent(fieldType) ?? go.GetComponentInChildren(fieldType, true);
                 if (comp == null) return null;
 
                 if (requiredType == null || requiredType.IsAssignableFrom(comp.GetType()))
@@ -315,7 +315,8 @@ namespace Yasin.EditorToolbox.Editor
                 if (requiredType == null || requiredType.IsAssignableFrom(typeof(GameObject)))
                     return go;
 
-                return go.GetComponent(requiredType) != null ? go : null;
+                var comp = go.GetComponent(requiredType) ?? go.GetComponentInChildren(requiredType, true);
+                return comp != null ? go : null;
             }
 
             if (typeof(ScriptableObject).IsAssignableFrom(fieldType))
@@ -334,7 +335,7 @@ namespace Yasin.EditorToolbox.Editor
                 {
                     if (go != null)
                     {
-                        var comp = go.GetComponent(requiredType);
+                        var comp = go.GetComponent(requiredType) ?? go.GetComponentInChildren(requiredType, true);
                         if (comp != null) return comp;
                     }
                 }
@@ -354,7 +355,7 @@ namespace Yasin.EditorToolbox.Editor
             if (obj is GameObject go)
             {
                 if (requiredType.IsAssignableFrom(typeof(GameObject))) return true;
-                return go.GetComponent(requiredType) != null;
+                return (go.GetComponent(requiredType) ?? go.GetComponentInChildren(requiredType, true)) != null;
             }
 
             return requiredType.IsAssignableFrom(obj.GetType());
