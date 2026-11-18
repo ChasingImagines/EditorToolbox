@@ -9,6 +9,12 @@
     "email": "chasingimagines@gmail.com",
     "url": "https://github.com/ChasingImagines"
   },
+  "contributors": [
+    {
+      "name": "Antigravity (Google DeepMind)",
+      "url": "https://deepmind.google"
+    }
+  ],
   "keywords": [
     "editor",
     "inspector",

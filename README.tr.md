@@ -107,5 +107,11 @@ public class SpawnerExample : MonoBehaviour
 
 ---
 
+## 👥 Emeği Geçenler (Credits)
+- **Geliştirici:** [Yasin Öztürk](https://github.com/ChasingImagines)
+- **AI Pair-Programmer:** Antigravity (Google DeepMind)
+
+---
+
 ## 📄 Lisans
 Bu proje MIT Lisansı altında sunulmaktadır - detaylar için [LICENSE](LICENSE) dosyasına göz atabilirsiniz.
