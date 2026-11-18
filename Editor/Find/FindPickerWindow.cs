@@ -234,7 +234,7 @@ namespace Yasin.EditorToolbox.Editor
             }
             else
             {
-                var normalized = FindAttributeDrawer.NormalizeForField(picked, _fieldType, _attr.RequiredType);
+                var normalized = FindAttributeDrawer.NormalizeForField(picked, _fieldType, _attr.RequiredType, _attr.IncludeChildren);
                 prop.objectReferenceValue = normalized;
             }
 
@@ -419,9 +419,9 @@ namespace Yasin.EditorToolbox.Editor
             }
         }
 
-        private static UnityEngine.Object CandidateFromGameObject(GameObject go, Type fieldType, Type requiredType)
+        private UnityEngine.Object CandidateFromGameObject(GameObject go, Type fieldType, Type requiredType)
         {
-            return FindAttributeDrawer.NormalizeForField(go, fieldType, requiredType);
+            return FindAttributeDrawer.NormalizeForField(go, fieldType, requiredType, _attr.IncludeChildren);
         }
 
         private static bool IsCompatible(UnityEngine.Object obj, Type fieldType, Type requiredType)

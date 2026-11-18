@@ -15,6 +15,7 @@ namespace Yasin.EditorToolbox
         public FindSource Source { get; set; } = FindSource.Auto;
         public bool WarnIfAssignedValueInvalid { get; set; } = true;
         public bool Inline { get; set; } = false;
+        public bool IncludeChildren { get; set; } = false;
 
         public FindAttribute(Type requiredType = null)
         {

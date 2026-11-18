@@ -253,7 +253,7 @@ namespace Yasin.EditorToolbox.Editor
             UnityEngine.Object accepted = null;
             foreach (var dragged in refs)
             {
-                var normalized = NormalizeForField(dragged, fieldType, attr.RequiredType);
+                var normalized = NormalizeForField(dragged, fieldType, attr.RequiredType, attr.IncludeChildren);
                 if (normalized != null && IsValid(normalized, attr))
                 {
                     accepted = normalized;
@@ -290,7 +290,7 @@ namespace Yasin.EditorToolbox.Editor
             return PassesSourceFilter(obj, attr.Source) && MatchesRequiredType(obj, attr.RequiredType);
         }
 
-        public static UnityEngine.Object NormalizeForField(UnityEngine.Object picked, Type fieldType, Type requiredType)
+        public static UnityEngine.Object NormalizeForField(UnityEngine.Object picked, Type fieldType, Type requiredType, bool includeChildren = false)
         {
             if (picked == null) return null;
 
@@ -299,7 +299,10 @@ namespace Yasin.EditorToolbox.Editor
             if (typeof(Component).IsAssignableFrom(fieldType))
             {
                 if (go == null) return null;
-                var comp = go.GetComponent(fieldType) ?? go.GetComponentInChildren(fieldType, true);
+                var comp = go.GetComponent(fieldType);
+                if (comp == null && includeChildren)
+                    comp = go.GetComponentInChildren(fieldType, true);
+
                 if (comp == null) return null;
 
                 if (requiredType == null || requiredType.IsAssignableFrom(comp.GetType()))
@@ -315,7 +318,10 @@ namespace Yasin.EditorToolbox.Editor
                 if (requiredType == null || requiredType.IsAssignableFrom(typeof(GameObject)))
                     return go;
 
-                var comp = go.GetComponent(requiredType) ?? go.GetComponentInChildren(requiredType, true);
+                var comp = go.GetComponent(requiredType);
+                if (comp == null && includeChildren)
+                    comp = go.GetComponentInChildren(requiredType, true);
+
                 return comp != null ? go : null;
             }
 
@@ -335,7 +341,10 @@ namespace Yasin.EditorToolbox.Editor
                 {
                     if (go != null)
                     {
-                        var comp = go.GetComponent(requiredType) ?? go.GetComponentInChildren(requiredType, true);
+                        var comp = go.GetComponent(requiredType);
+                        if (comp == null && includeChildren)
+                            comp = go.GetComponentInChildren(requiredType, true);
+
                         if (comp != null) return comp;
                     }
                 }
@@ -355,7 +364,7 @@ namespace Yasin.EditorToolbox.Editor
             if (obj is GameObject go)
             {
                 if (requiredType.IsAssignableFrom(typeof(GameObject))) return true;
-                return (go.GetComponent(requiredType) ?? go.GetComponentInChildren(requiredType, true)) != null;
+                return go.GetComponent(requiredType) != null;
             }
 
             return requiredType.IsAssignableFrom(obj.GetType());

@@ -43,6 +43,14 @@ Never lose time dragging objects across nested inspector windows or digging thro
   public IItemPickup Item => itemPickup as IItemPickup;
   ```
 
+- **Optional Child Inspection (`IncludeChildren`):**
+  By default, `[Find]` inspects the root GameObject. When needed, enable `IncludeChildren = true` to search deep into the prefab hierarchy:
+  ```csharp
+  // Searches root AND children for HitboxCollider
+  [Find(typeof(HitboxCollider), IncludeChildren = true)]
+  public HitboxCollider targetHitbox;
+  ```
+
 - **ScriptableObjects & Assets:**
   ```csharp
   [Find(typeof(BuildingDef), Source = FindSource.Assets)]

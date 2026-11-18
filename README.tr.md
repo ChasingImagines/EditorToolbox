@@ -38,6 +38,14 @@ Upuzun proje klasörlerinde kaybolmaya veya karmaşık pencereler arasında sür
   public IItemPickup Item => itemPickup as IItemPickup;
   ```
 
+- **İsteğe Bağlı Alt Nesne (Child) Taraması (`IncludeChildren`):**
+  Varsayılan olarak `[Find]` kök (root) nesneyi inceler. İhtiyaç olduğunda `IncludeChildren = true` diyerek prefab hiyerarşisinin derinliklerine inebilirsiniz:
+  ```csharp
+  // Kök ve alt çocuk nesneleri (children) tarar
+  [Find(typeof(HitboxCollider), IncludeChildren = true)]
+  public HitboxCollider targetHitbox;
+  ```
+
 - **ScriptableObject ve Varlık Seçimi:**
   ```csharp
   [Find(typeof(BuildingDef), Source = FindSource.Assets)]
