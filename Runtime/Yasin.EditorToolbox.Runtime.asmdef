@@ -1,0 +1,14 @@
+{
+    "name": "Yasin.EditorToolbox.Runtime",
+    "rootNamespace": "Yasin.EditorToolbox",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
