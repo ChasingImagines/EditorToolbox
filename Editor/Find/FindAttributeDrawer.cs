@@ -8,96 +8,141 @@ using Yasin.EditorToolbox;
 namespace Yasin.EditorToolbox.Editor
 {
     /// <summary>
-    /// CustomPropertyDrawer for [Find] attribute.
-    /// Provides type-safe object/component picking, drag &amp; drop, ping/focus, and optional inline editing.
+    /// Custom property drawer for [Find] attribute.
+    /// Provides type-safe object/component picking, drag-and-drop extraction, ping/focus, and optional inline editing.
     /// </summary>
+    [InitializeOnLoad]
     [CustomPropertyDrawer(typeof(FindAttribute))]
     public sealed class FindAttributeDrawer : PropertyDrawer
     {
-        private const float BtnW = 22f;
+        private const float ClearBtnW = 18f;
+        private const float SearchBtnW = 22f;
         private const float Gap = 2f;
+        private const float HelpBoxHeight = 32f;
 
         private static readonly Dictionary<string, bool> InlineFoldouts = new Dictionary<string, bool>();
 
+        private static GUIStyle _buttonStyle;
+        private static GUIContent _searchIconContent;
+        private static GUIContent _clearIconContent;
+
+        static FindAttributeDrawer()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += InlineFoldouts.Clear;
+        }
+
+        private static GUIStyle ButtonStyle
+        {
+            get
+            {
+                if (_buttonStyle == null)
+                {
+#if UNITY_2022_1_OR_NEWER
+                    _buttonStyle = EditorStyles.iconButton ?? EditorStyles.miniButton;
+#else
+                    _buttonStyle = new GUIStyle(EditorStyles.miniButton)
+                    {
+                        padding = new RectOffset(2, 2, 2, 2),
+                        margin = new RectOffset(0, 0, 0, 0)
+                    };
+#endif
+                }
+                return _buttonStyle;
+            }
+        }
+
+        private static GUIContent SearchIconContent
+        {
+            get
+            {
+                if (_searchIconContent == null)
+                {
+                    var icon = EditorGUIUtility.IconContent("d_Search Icon");
+                    if (icon == null || icon.image == null)
+                        icon = EditorGUIUtility.IconContent("Search Icon");
+
+                    _searchIconContent = (icon != null && icon.image != null)
+                        ? new GUIContent(icon.image, "Open Find Picker")
+                        : new GUIContent("?", "Open Find Picker");
+                }
+                return _searchIconContent;
+            }
+        }
+
+        private static GUIContent ClearIconContent
+            => _clearIconContent ?? (_clearIconContent = new GUIContent("\u00D7", "Clear reference"));
+
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-            var attr = (FindAttribute)attribute;
-
             if (property.propertyType != SerializedPropertyType.ObjectReference)
             {
-                EditorGUI.HelpBox(position, "[Find] attribute only supports UnityEngine.Object reference fields.", MessageType.Error);
+                EditorGUI.HelpBox(
+                    new Rect(position.x, position.y, position.width, HelpBoxHeight),
+                    "[Find] attribute only supports UnityEngine.Object reference fields.",
+                    MessageType.Error
+                );
                 return;
             }
 
+            var attr = (FindAttribute)attribute;
+            Type resolvedFieldType = GetTargetFieldType(property);
+
             EditorGUI.BeginProperty(position, label, property);
 
-            // Main line
             var line = new Rect(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
             var content = EditorGUI.PrefixLabel(line, label);
 
-            var fieldRect = new Rect(content.x, content.y, content.width - BtnW - Gap, content.height);
-            var btnRect = new Rect(fieldRect.xMax + Gap, content.y, BtnW, content.height);
+            float buttonsTotalW = ClearBtnW + SearchBtnW + Gap * 2f;
+            float fieldW = Mathf.Max(40f, content.width - buttonsTotalW);
+            var fieldRect = new Rect(content.x, content.y, fieldW, content.height);
+            var clearRect = new Rect(fieldRect.xMax + Gap, content.y, ClearBtnW, content.height);
+            var searchRect = new Rect(clearRect.xMax + Gap, content.y, SearchBtnW, content.height);
 
-            DrawReadOnlyObjectLikeField(fieldRect, property.objectReferenceValue);
+            var assigned = property.objectReferenceValue;
+            DrawReadOnlyObjectLikeField(fieldRect, property, assigned, resolvedFieldType, attr);
 
-            // Drag & Drop
-            Type resolvedFieldType = GetTargetFieldType(property);
-            HandleDragAndDrop(fieldRect, property, resolvedFieldType, attr);
+            if (GUI.enabled && IsValidRequiredType(attr.RequiredType))
+                HandleDragAndDrop(fieldRect, property, resolvedFieldType, attr);
 
-            // Focus / Ping
-            HandleFocusClick(fieldRect, property.objectReferenceValue);
+            if (!property.hasMultipleDifferentValues)
+                HandleFocusClick(fieldRect, assigned);
 
-            // Picker Window Button
-            GUIContent searchIcon = EditorGUIUtility.IconContent("d_Search Icon");
-            if (searchIcon == null || searchIcon.image == null)
-                searchIcon = EditorGUIUtility.IconContent("Search Icon");
-
-            if (GUI.Button(btnRect, searchIcon ?? new GUIContent("🔍"), EditorStyles.iconButton))
+            bool canClear = GUI.enabled && (property.hasMultipleDifferentValues || assigned != null);
+            using (new EditorGUI.DisabledScope(!canClear))
             {
-                FindPickerWindow.Open(property, resolvedFieldType, attr);
+                if (GUI.Button(clearRect, ClearIconContent, ButtonStyle))
+                {
+                    property.objectReferenceValue = null;
+                    property.serializedObject.ApplyModifiedProperties();
+                    GUI.changed = true;
+                }
             }
+
+            if (GUI.Button(searchRect, SearchIconContent, ButtonStyle))
+                FindPickerWindow.Open(property, resolvedFieldType, attr);
 
             float y = line.yMax;
 
-            // Incompatible type warning
-            var assigned = property.objectReferenceValue;
-            bool invalidAssigned = assigned != null && !IsValid(assigned, attr);
-            if (invalidAssigned && attr.WarnIfAssignedValueInvalid)
+            string diagMessage = GetDiagnosticMessage(property, resolvedFieldType, attr, out MessageType diagType);
+            if (diagMessage != null)
             {
-                var warnRect = new Rect(
-                    position.x,
-                    y + 2f,
-                    position.width,
-                    EditorGUIUtility.singleLineHeight * 1.5f
-                );
-                EditorGUI.HelpBox(
-                    warnRect,
-                    $"Incompatible reference: Expected '{attr.RequiredType?.Name ?? resolvedFieldType.Name}', Source: {attr.Source}",
-                    MessageType.Warning
-                );
-                y = warnRect.yMax;
+                var diagRect = EditorGUI.IndentedRect(new Rect(position.x, y + 2f, position.width, HelpBoxHeight));
+                EditorGUI.HelpBox(diagRect, diagMessage, diagType);
+                y = diagRect.yMax;
             }
 
-            // Inline foldout
-            if (attr.Inline && InlineEditorApi.TryGetSerializedObject(property, out var so, out var target))
+            if (attr.Inline && InlineEditorApi.TryGetInlineTarget(property, out var inlineTarget))
             {
-                var foldRect = new Rect(
-                    position.x + 16f,
-                    y,
-                    position.width - 16f,
-                    EditorGUIUtility.singleLineHeight
-                );
-
-                bool expanded = GetInlineExpanded(property);
+                var foldRect = new Rect(position.x, y + 2f, position.width, EditorGUIUtility.singleLineHeight);
+                bool expanded = GetInlineExpanded(property, attr.StartInlineExpanded);
                 expanded = EditorGUI.Foldout(foldRect, expanded, "Content (Inline)", true);
                 SetInlineExpanded(property, expanded);
 
-                y += EditorGUIUtility.singleLineHeight;
+                y = foldRect.yMax;
 
                 if (expanded)
                 {
-                    float inlineHeight = InlineEditorApi.CalculateInlineHeight(so, target);
-
+                    float inlineHeight = InlineEditorApi.CalculateInlineHeight(property, inlineTarget);
                     var inlineRect = new Rect(
                         position.x,
                         y + EditorGUIUtility.standardVerticalSpacing,
@@ -106,7 +151,7 @@ namespace Yasin.EditorToolbox.Editor
                     );
 
                     EditorGUI.indentLevel++;
-                    InlineEditorApi.DrawInlineFields(inlineRect, so, target);
+                    InlineEditorApi.DrawInlineFields(inlineRect, property, inlineTarget);
                     EditorGUI.indentLevel--;
                 }
             }
@@ -116,74 +161,110 @@ namespace Yasin.EditorToolbox.Editor
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            float h = EditorGUIUtility.singleLineHeight;
-
             if (property.propertyType != SerializedPropertyType.ObjectReference)
-                return h;
+                return HelpBoxHeight;
 
+            float height = EditorGUIUtility.singleLineHeight;
             var attr = (FindAttribute)attribute;
+            Type resolvedFieldType = GetTargetFieldType(property);
 
-            var assigned = property.objectReferenceValue;
-            bool invalidAssigned = assigned != null && !IsValid(assigned, attr);
-            if (invalidAssigned && attr.WarnIfAssignedValueInvalid)
-                h += 2f + EditorGUIUtility.singleLineHeight * 1.5f;
+            if (GetDiagnosticMessage(property, resolvedFieldType, attr, out _) != null)
+                height += 2f + HelpBoxHeight;
 
-            if (attr.Inline && InlineEditorApi.TryGetSerializedObject(property, out var so, out var target))
+            if (attr.Inline && InlineEditorApi.TryGetInlineTarget(property, out var inlineTarget))
             {
-                h += EditorGUIUtility.singleLineHeight;
+                height += 2f + EditorGUIUtility.singleLineHeight;
 
-                if (GetInlineExpanded(property))
+                if (GetInlineExpanded(property, attr.StartInlineExpanded))
                 {
-                    h += EditorGUIUtility.standardVerticalSpacing;
-                    h += InlineEditorApi.CalculateInlineHeight(so, target);
+                    height += EditorGUIUtility.standardVerticalSpacing;
+                    height += InlineEditorApi.CalculateInlineHeight(property, inlineTarget);
                 }
             }
 
-            return h;
+            return height;
+        }
+
+        private static string GetDiagnosticMessage(SerializedProperty property, Type resolvedFieldType, FindAttribute attr, out MessageType messageType)
+        {
+            if (!IsValidRequiredType(attr.RequiredType))
+            {
+                messageType = MessageType.Error;
+                return $"Invalid [Find] RequiredType '{attr.RequiredType.Name}': must be an interface or assignable to UnityEngine.Object.";
+            }
+
+            if (attr.Source == FindSource.None)
+            {
+                messageType = MessageType.Warning;
+                return "[Find] Source is set to None. No objects or assets can be picked.";
+            }
+
+            if (!property.hasMultipleDifferentValues && attr.WarnIfAssignedValueInvalid)
+            {
+                var assigned = property.objectReferenceValue;
+                if (assigned != null && !IsValid(assigned, resolvedFieldType, attr))
+                {
+                    messageType = MessageType.Warning;
+                    return $"Incompatible reference: expected '{(attr.RequiredType ?? resolvedFieldType).Name}', source '{attr.Source}'.";
+                }
+            }
+
+            messageType = MessageType.None;
+            return null;
         }
 
         private Type GetTargetFieldType(SerializedProperty property)
         {
-            var fi = fieldInfo != null ? fieldInfo : InlineEditorApi.GetFieldInfoFromProperty(property);
+            var fi = fieldInfo ?? InlineEditorApi.GetFieldInfoFromProperty(property);
             if (fi != null)
             {
-                if (fi.FieldType.IsArray)
-                    return fi.FieldType.GetElementType();
-                if (fi.FieldType.IsGenericType && fi.FieldType.GetGenericTypeDefinition() == typeof(List<>))
-                    return fi.FieldType.GetGenericArguments()[0];
-                return fi.FieldType;
+                Type t = fi.FieldType;
+                if (t.IsArray)
+                    return t.GetElementType();
+                if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>))
+                    return t.GetGenericArguments()[0];
+                return t;
             }
             return typeof(UnityEngine.Object);
         }
 
         private static string InlineKey(SerializedProperty p)
-            => $"{p.serializedObject.targetObject.GetInstanceID()}:{p.propertyPath}:find_inline";
+        {
+            var obj = p.serializedObject?.targetObject;
+            int id = obj != null ? obj.GetInstanceID() : 0;
+            return $"{id}:{p.propertyPath}:find_inline";
+        }
 
-        private static bool GetInlineExpanded(SerializedProperty p)
+        private static bool GetInlineExpanded(SerializedProperty p, bool defaultExpanded)
         {
             string key = InlineKey(p);
             if (InlineFoldouts.TryGetValue(key, out bool v)) return v;
 
-            InlineFoldouts[key] = false;
-            return false;
+            InlineFoldouts[key] = defaultExpanded;
+            return defaultExpanded;
         }
 
         private static void SetInlineExpanded(SerializedProperty p, bool value)
             => InlineFoldouts[InlineKey(p)] = value;
 
-        private static void DrawReadOnlyObjectLikeField(Rect rect, UnityEngine.Object value)
+        private static void DrawReadOnlyObjectLikeField(Rect rect, SerializedProperty property, UnityEngine.Object value, Type fallbackType, FindAttribute attr)
         {
             GUI.Box(rect, GUIContent.none, EditorStyles.objectField);
 
             var iconRect = new Rect(rect.x + 2f, rect.y + 1f, rect.height - 2f, rect.height - 2f);
-            var textRect = new Rect(iconRect.xMax + 2f, rect.y, rect.width - iconRect.width - 6f, rect.height);
+            var textRect = new Rect(iconRect.xMax + 2f, rect.y, Mathf.Max(0f, rect.width - iconRect.width - 6f), rect.height);
 
             Texture icon = null;
             string text;
 
-            if (value == null)
+            if (property.hasMultipleDifferentValues)
             {
-                text = "None (Not assigned)";
+                text = "\u2014 (Mixed values)";
+            }
+            else if (value == null)
+            {
+                string expectedName = (attr.RequiredType ?? fallbackType)?.Name ?? nameof(UnityEngine.Object);
+                text = $"None ({expectedName})";
             }
             else
             {
@@ -194,7 +275,7 @@ namespace Yasin.EditorToolbox.Editor
             if (icon != null)
                 GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit);
 
-            EditorGUI.LabelField(textRect, text, EditorStyles.label);
+            GUI.Label(textRect, text, EditorStyles.label);
         }
 
         private static void HandleFocusClick(Rect fieldRect, UnityEngine.Object current)
@@ -202,8 +283,7 @@ namespace Yasin.EditorToolbox.Editor
             if (current == null) return;
 
             var e = Event.current;
-            if (e.type != EventType.MouseDown) return;
-            if (e.button != 0) return;
+            if (e.type != EventType.MouseDown || e.button != 0) return;
             if (!fieldRect.Contains(e.mousePosition)) return;
 
             if (e.clickCount == 1)
@@ -219,12 +299,17 @@ namespace Yasin.EditorToolbox.Editor
                 {
                     Selection.activeObject = c.gameObject;
                     EditorGUIUtility.PingObject(c.gameObject);
+                    if (!EditorUtility.IsPersistent(c.gameObject))
+                        SceneView.lastActiveSceneView?.FrameSelected();
                 }
                 else if (current is GameObject go)
                 {
                     Selection.activeObject = go;
                     EditorGUIUtility.PingObject(go);
-                    SceneView.lastActiveSceneView?.FrameSelected();
+                    if (!EditorUtility.IsPersistent(go))
+                        SceneView.lastActiveSceneView?.FrameSelected();
+                    else
+                        AssetDatabase.OpenAsset(go);
                 }
                 else
                 {
@@ -237,7 +322,7 @@ namespace Yasin.EditorToolbox.Editor
             }
         }
 
-        private void HandleDragAndDrop(Rect dropRect, SerializedProperty property, Type fieldType, FindAttribute attr)
+        private static void HandleDragAndDrop(Rect dropRect, SerializedProperty property, Type fieldType, FindAttribute attr)
         {
             var e = Event.current;
             if (!dropRect.Contains(e.mousePosition)) return;
@@ -247,14 +332,15 @@ namespace Yasin.EditorToolbox.Editor
             if (refs == null || refs.Length == 0)
             {
                 DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
+                e.Use();
                 return;
             }
 
             UnityEngine.Object accepted = null;
-            foreach (var dragged in refs)
+            for (int i = 0; i < refs.Length; i++)
             {
-                var normalized = NormalizeForField(dragged, fieldType, attr.RequiredType);
-                if (normalized != null && IsValid(normalized, attr))
+                var normalized = NormalizeForField(refs[i], fieldType, attr.RequiredType);
+                if (normalized != null && IsValid(normalized, fieldType, attr))
                 {
                     accepted = normalized;
                     break;
@@ -265,46 +351,156 @@ namespace Yasin.EditorToolbox.Editor
                 ? DragAndDropVisualMode.Link
                 : DragAndDropVisualMode.Rejected;
 
-            if (e.type == EventType.DragPerform)
+            if (e.type == EventType.DragPerform && accepted != null)
             {
-                if (accepted != null)
-                {
-                    DragAndDrop.AcceptDrag();
-                    property.serializedObject.Update();
-                    property.objectReferenceValue = accepted;
-                    property.serializedObject.ApplyModifiedProperties();
-                    EditorUtility.SetDirty(property.serializedObject.targetObject);
-                }
+                DragAndDrop.AcceptDrag();
+                property.objectReferenceValue = accepted;
+                property.serializedObject.ApplyModifiedProperties();
+                GUI.changed = true;
+            }
 
-                e.Use();
-            }
-            else
-            {
-                e.Use();
-            }
+            e.Use();
         }
 
-        private static bool IsValid(UnityEngine.Object obj, FindAttribute attr)
+        public static bool IsValidRequiredType(Type requiredType)
         {
-            if (obj == null) return false;
-            return PassesSourceFilter(obj, attr.Source) && MatchesRequiredType(obj, attr.RequiredType);
+            return requiredType == null
+                || requiredType.IsInterface
+                || typeof(UnityEngine.Object).IsAssignableFrom(requiredType);
+        }
+
+        public static bool CanMatchGameObjectOrComponent(Type fieldType, Type requiredType)
+        {
+            if (fieldType == null || !IsValidRequiredType(requiredType))
+                return false;
+
+            bool fieldAcceptsGoOrComp = fieldType == typeof(UnityEngine.Object)
+                || fieldType == typeof(GameObject)
+                || typeof(Component).IsAssignableFrom(fieldType);
+
+            if (!fieldAcceptsGoOrComp)
+                return false;
+
+            if (requiredType == null)
+                return true;
+
+            return requiredType.IsInterface
+                || requiredType == typeof(UnityEngine.Object)
+                || requiredType == typeof(GameObject)
+                || typeof(Component).IsAssignableFrom(requiredType);
+        }
+
+        public static bool CanMatchAsset(Type fieldType, Type requiredType)
+        {
+            if (fieldType == null || !IsValidRequiredType(requiredType))
+                return false;
+
+            if (fieldType == typeof(GameObject) || typeof(Component).IsAssignableFrom(fieldType))
+                return false;
+
+            if (requiredType == null)
+                return true;
+
+            if (requiredType == typeof(GameObject) || typeof(Component).IsAssignableFrom(requiredType))
+                return false;
+
+            if (!requiredType.IsInterface && !fieldType.IsInterface
+                && !fieldType.IsAssignableFrom(requiredType)
+                && !requiredType.IsAssignableFrom(fieldType))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public static void CollectCandidatesFromGameObject(GameObject go, Type fieldType, Type requiredType, List<UnityEngine.Object> results)
+        {
+            if (go == null || results == null || fieldType == null || !IsValidRequiredType(requiredType))
+                return;
+
+            if (typeof(Component).IsAssignableFrom(fieldType))
+            {
+                var components = go.GetComponents(fieldType);
+                for (int i = 0; i < components.Length; i++)
+                {
+                    var comp = components[i];
+                    if (comp != null && SatisfiesRequired(comp, requiredType))
+                        results.Add(comp);
+                }
+                return;
+            }
+
+            if (fieldType == typeof(GameObject))
+            {
+                if (requiredType == null || requiredType.IsAssignableFrom(typeof(GameObject)))
+                {
+                    results.Add(go);
+                    return;
+                }
+
+                if (typeof(Component).IsAssignableFrom(requiredType) || requiredType.IsInterface)
+                {
+                    var components = go.GetComponents<Component>();
+                    for (int i = 0; i < components.Length; i++)
+                    {
+                        var comp = components[i];
+                        if (comp != null && requiredType.IsAssignableFrom(comp.GetType()))
+                        {
+                            results.Add(go);
+                            return;
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (fieldType == typeof(UnityEngine.Object))
+            {
+                if (requiredType == null || requiredType.IsAssignableFrom(typeof(GameObject)))
+                {
+                    results.Add(go);
+                    return;
+                }
+
+                if (typeof(Component).IsAssignableFrom(requiredType) || requiredType.IsInterface)
+                {
+                    var components = go.GetComponents<Component>();
+                    for (int i = 0; i < components.Length; i++)
+                    {
+                        var comp = components[i];
+                        if (comp != null && requiredType.IsAssignableFrom(comp.GetType()))
+                            results.Add(comp);
+                    }
+                }
+            }
         }
 
         public static UnityEngine.Object NormalizeForField(UnityEngine.Object picked, Type fieldType, Type requiredType)
         {
-            if (picked == null) return null;
+            if (picked == null || fieldType == null || !IsValidRequiredType(requiredType))
+                return null;
 
             GameObject go = picked as GameObject ?? (picked as Component)?.gameObject;
 
             if (typeof(Component).IsAssignableFrom(fieldType))
             {
+                if (picked is Component directComp
+                    && fieldType.IsAssignableFrom(directComp.GetType())
+                    && SatisfiesRequired(directComp, requiredType))
+                {
+                    return directComp;
+                }
+
                 if (go == null) return null;
-                var comp = go.GetComponent(fieldType);
-                if (comp == null) return null;
 
-                if (requiredType == null || requiredType.IsAssignableFrom(comp.GetType()))
-                    return comp;
-
+                var components = go.GetComponents(fieldType);
+                for (int i = 0; i < components.Length; i++)
+                {
+                    var comp = components[i];
+                    if (comp != null && SatisfiesRequired(comp, requiredType))
+                        return comp;
+                }
                 return null;
             }
 
@@ -315,70 +511,116 @@ namespace Yasin.EditorToolbox.Editor
                 if (requiredType == null || requiredType.IsAssignableFrom(typeof(GameObject)))
                     return go;
 
-                var comp = go.GetComponent(requiredType);
-                return comp != null ? go : null;
-            }
-
-            if (typeof(ScriptableObject).IsAssignableFrom(fieldType))
-            {
-                if (picked is ScriptableObject so && fieldType.IsAssignableFrom(so.GetType()))
+                if (typeof(Component).IsAssignableFrom(requiredType) || requiredType.IsInterface)
                 {
-                    if (requiredType == null || requiredType.IsAssignableFrom(so.GetType()))
-                        return so;
+                    var components = go.GetComponents<Component>();
+                    for (int i = 0; i < components.Length; i++)
+                    {
+                        var comp = components[i];
+                        if (comp != null && requiredType.IsAssignableFrom(comp.GetType()))
+                            return go;
+                    }
                 }
                 return null;
             }
 
             if (fieldType == typeof(UnityEngine.Object))
             {
-                if (requiredType != null && (typeof(Component).IsAssignableFrom(requiredType) || requiredType.IsInterface))
+                if (SatisfiesRequired(picked, requiredType))
+                    return picked;
+
+                if (go != null && requiredType != null && (typeof(Component).IsAssignableFrom(requiredType) || requiredType.IsInterface))
                 {
-                    if (go != null)
+                    var components = go.GetComponents<Component>();
+                    for (int i = 0; i < components.Length; i++)
                     {
-                        var comp = go.GetComponent(requiredType);
-                        if (comp != null) return comp;
+                        var comp = components[i];
+                        if (comp != null && requiredType.IsAssignableFrom(comp.GetType()))
+                            return comp;
                     }
                 }
+                return null;
+            }
 
-                if (requiredType == null || requiredType.IsAssignableFrom(picked.GetType()))
-                    return picked;
+            // Non-Component/GameObject assets: ScriptableObject, AudioClip, Material, Texture2D, Sprite, Mesh, etc.
+            if (fieldType.IsAssignableFrom(picked.GetType()) && SatisfiesRequired(picked, requiredType))
+                return picked;
+
+            if (fieldType == typeof(Sprite) && picked is Texture2D)
+            {
+                string assetPath = AssetDatabase.GetAssetPath(picked);
+                if (!string.IsNullOrEmpty(assetPath))
+                {
+                    var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
+                    if (sprite != null && SatisfiesRequired(sprite, requiredType))
+                        return sprite;
+                }
             }
 
             return null;
         }
 
-        private static bool MatchesRequiredType(UnityEngine.Object obj, Type requiredType)
+        internal static bool IsValid(UnityEngine.Object obj, Type fieldType, FindAttribute attr)
+        {
+            if (obj == null || attr == null) return false;
+            if (!IsValidRequiredType(attr.RequiredType)) return false;
+            if (!PassesSourceFilter(obj, attr.Source)) return false;
+
+            if (fieldType != null && fieldType != typeof(UnityEngine.Object) && !fieldType.IsAssignableFrom(obj.GetType()))
+                return false;
+
+            return MatchesRequiredType(obj, attr.RequiredType);
+        }
+
+        internal static bool SatisfiesRequired(UnityEngine.Object obj, Type requiredType)
+        {
+            if (obj == null) return false;
+            if (requiredType == null) return true;
+            return requiredType.IsAssignableFrom(obj.GetType());
+        }
+
+        internal static bool MatchesRequiredType(UnityEngine.Object obj, Type requiredType)
         {
             if (obj == null) return false;
             if (requiredType == null) return true;
 
-            if (obj is GameObject go)
+            if (requiredType.IsAssignableFrom(obj.GetType()))
+                return true;
+
+            if (obj is GameObject go && (typeof(Component).IsAssignableFrom(requiredType) || requiredType.IsInterface))
             {
-                if (requiredType.IsAssignableFrom(typeof(GameObject))) return true;
-                return go.GetComponent(requiredType) != null;
+                var components = go.GetComponents<Component>();
+                for (int i = 0; i < components.Length; i++)
+                {
+                    var comp = components[i];
+                    if (comp != null && requiredType.IsAssignableFrom(comp.GetType()))
+                        return true;
+                }
             }
 
-            return requiredType.IsAssignableFrom(obj.GetType());
+            return false;
         }
 
         private static bool PassesSourceFilter(UnityEngine.Object obj, FindSource source)
         {
-            if (source == FindSource.Auto) return true;
             if (source == FindSource.None) return false;
+            if (source == FindSource.Auto) return true;
 
             bool allowScene = (source & FindSource.Scene) != 0;
             bool allowPrefabs = (source & FindSource.Prefabs) != 0;
             bool allowAssets = (source & FindSource.Assets) != 0;
 
-            bool isPersistent = EditorUtility.IsPersistent(obj);
-            if (!isPersistent) return allowScene;
+            if (!EditorUtility.IsPersistent(obj))
+                return allowScene;
+
+            var prefabType = PrefabUtility.GetPrefabAssetType(obj);
+            if (prefabType != PrefabAssetType.NotAPrefab)
+                return allowPrefabs;
 
             string path = AssetDatabase.GetAssetPath(obj);
-            var prefabType = PrefabUtility.GetPrefabAssetType(obj);
-            bool isPrefabAsset = prefabType != PrefabAssetType.NotAPrefab ||
-                                 path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(path) && path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                return allowPrefabs;
 
-            if (isPrefabAsset) return allowPrefabs;
             return allowAssets;
         }
     }

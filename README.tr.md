@@ -1,18 +1,32 @@
 # Editor Toolbox for Unity (Türkçe)
 
-Unity için modüler, hafif ve yüksek performanslı Inspector geliştirme ve üretkenlik kiti. Akıllı bileşen/arayüz filtreli prefab seçici, yerinde ScriptableObject editörü ve temel özellik nitelikleriyle editör iş akışınızı hızlandırır.
+[![Lisans: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
+[![Unity 2021.3–Unity 6](https://img.shields.io/badge/unity-2021.3%E2%80%936-blue.svg)](https://unity.com/)
+[![Sürüm 2.0.0](https://img.shields.io/badge/version-2.0.0-orange.svg)](package.json)
+
+Unity (2021.3 – Unity 6) için modüler, hafif ve yüksek performanslı Inspector geliştirme ve üretkenlik kiti. Akıllı varlık/bileşen/arayüz seçicisi, yerinde `ScriptableObject` editörü ve temel özellik nitelikleriyle editör iş akışınızı hızlandırır—**sıfır gereksiz yük, sıfır harici bağımlılık**.
 
 ---
 
 ## ✨ Öne Çıkan Yetenekler ve Gerçek Kullanım Senaryoları
 
 ### 1. 🔍 Akıllı Varlık, Prefab ve Arayüz Seçici (`[Find]`)
-Upuzun proje klasörlerinde kaybolmaya veya karmaşık pencereler arasında sürükleyip bırakmaya son:
+Upuzun proje klasörlerinde kaybolmaya veya pencereler arasında sürükle-bırak yapmaya son:
+
+- **Tüm `UnityEngine.Object` Varlık Tipleriyle Tam Uyumluluk:**
+  `ScriptableObject`, `AudioClip`, `Material`, `Texture2D`, `Sprite` (alt-varlık / sub-asset dahil), `Mesh`, `AnimationClip`, `Shader`, `TextAsset`, prefab ve bileşenleri doğrudan seçin:
+  ```csharp
+  [Find(Source = FindSource.Assets)]
+  public AudioClip impactClip;
+
+  [Find(Source = FindSource.Assets)]
+  public Sprite itemIcon;
+  ```
 
 - **Bileşen veya Arayüze (Interface) Sahip Prefabları Filtreleme (`GameObject` Saklama):**
-  Inspector'da `GameObject` olarak bir prefab atamak istiyorsunuz, ancak **yalnızca üzerinde belirli bir bileşen veya interface (`IInteractable`, `Health`, vb.) olan prefab'ların seçilebilmesini** mi istiyorsunuz?
+  Inspector'da `GameObject` olarak bir prefab atamak, ancak **yalnızca üzerinde belirli bir bileşen veya interface (`IInteractable`, `DamageDealer` vb.) bulunan prefab'ların seçilebilmesini** mi istiyorsunuz?
   ```csharp
-  // Arama penceresi yalnızca üzerinde IInteractable olan prefabları listeler!
+  // GameObject üzerindeki tüm bileşenleri tarar, yalnızca IInteractable içeren prefabları listeler
   [Find(typeof(IInteractable), Source = FindSource.Prefabs)]
   public GameObject interactablePrefab;
 
@@ -21,16 +35,13 @@ Upuzun proje klasörlerinde kaybolmaya veya karmaşık pencereler arasında sür
   public GameObject weaponPrefab;
   ```
 
-- **Prefab veya Sahneden Doğrudan Bileşen (`Component`) Seçip Alma:**
-  `GameObject` alıp runtime'da `GetComponent` çağırmak yerine, doğrudan prefab'ın üzerindeki bileşeni değişkene bağlayın:
+- **Prefab veya Sahneden Doğrudan Bileşen (`Component`) Bağlama:**
   ```csharp
-  // Sahne ve prefabları tarar, üzerindeki NavMeshAgent bileşenini doğrudan bağlar
   [Find(Source = FindSource.Prefabs | FindSource.Scene)]
   public NavMeshAgent agentTemplate;
   ```
 
 - **Arayüz (Interface) Sözleşmesi Zorlama:**
-  Unity saf C# arayüzlerini serileştiremez. `UnityEngine.Object` ve `[Find]` ile Inspector seviyesinde arayüz desteği sağlayabilirsiniz:
   ```csharp
   [Find(typeof(IItemPickup))]
   public UnityEngine.Object itemPickup;
@@ -38,31 +49,31 @@ Upuzun proje klasörlerinde kaybolmaya veya karmaşık pencereler arasında sür
   public IItemPickup Item => itemPickup as IItemPickup;
   ```
 
-- **ScriptableObject ve Varlık Seçimi:**
+- **`[Find]` + Yerinde Düzenleme Birlikte:**
   ```csharp
-  [Find(typeof(BuildingDef), Source = FindSource.Assets)]
+  [Find(Source = FindSource.Assets, Inline = true, StartInlineExpanded = true)]
   public BuildingDef targetBuilding;
   ```
 
 - **Gelişmiş Arama Penceresi (`FindPickerWindow`):**
-  - **Sekmeler:** Sahne Nesneleri (Scene), Prefablar (Prefabs) ve Varlıklar (Assets).
-  - **Canlı Arama:** Türkçe ve aksanlı karakterleri normalleştirerek hızlı arama (örn. `ı`/`i`, `ş`/`s`).
-  - **Sürükle & Bırak:** Uygun nesneyi veya bileşeni otomatik ayıklar ve bağlar.
-  - **Odaklanma (Ping/Focus):** Tek tıkla Hierarchy/Project'te gösterir, çift tıkla Scene görünümünde odaklar.
+  - **Akıllı Sekmeler:** Alan tipine uymayan gereksiz sekmeleri gizler ve ilk dolu sekmeyi otomatik açar.
+  - **Önbellekli Canlı Arama:** Türkçe ve aksanlı karakterleri (`İ`/`i`, `ş`/`s`, `ğ`/`g` vb.) normalleştirir, sıfır frame tahsisiyle hızlı ve bulanık (fuzzy) arama yapar.
+  - **Hızlı İşlemler:** Tek tıkla temizleme (`×`), sürükle-bırak ile bileşen/`Sprite` ayıklama, tek tıkla Ping, çift tıkla Odaklanma/Açma.
 
 ---
 
 ### 2. 📝 Yerinde ScriptableObject Düzenleme (`[Inline]`)
-ScriptableObject alanlarını başka pencereye gitmeden doğrudan mevcut Inspector içinde açın ve düzenleyin.
-- **`[Inline]`**: Alanın yanına katlanabilir (foldout) açma/kapatma oku ekler.
-- **Döngüsel Referans Koruması**: İç içe geçmiş nesnelerin birbirini referans vermesi durumunda sonsuz döngüyü ve editör kilitlenmesini engeller.
-- **`[InlineReadOnly]`**: Inline panelinde alanın sadece okunabilir (gri/disabled) gösterilmesini sağlar.
-- **`[InlineIgnore]`**: Belirli alanların inline görünümünde gizlenmesini sağlar.
+`ScriptableObject` alanlarını başka pencere açmadan doğrudan mevcut Inspector içinde düzenleyin.
+- **`[Inline(startExpanded, MaxDepth = 4)]`**: Katlanabilir açma/kapatma oku ve yapılandırılabilir derinlik sınırı sunar.
+- **Döngü Tespiti ve Derinlik Limiti**: Gerçek döngüsel referansları keserken çok katmanlı normal hiyerarşilere `MaxDepth`'e kadar izin verir.
+- **Güvenli Önbellek Yaşam Döngüsü**: `SerializedObject` örneklerini yeniden kullanır; seçim, derleme ve Play Mode değişimlerinde otomatik temizler (`Dispose`).
+- **`[InlineReadOnly]`**: Inline panelinde alanı salt-okunur gösterir (`System.Attribute` tabanlı olduğu için `[Range]`, `[Find]` vb. ile çakışmaz).
+- **`[InlineIgnore]`**: Belirli alanları inline görünümde gizler.
 
 ---
 
 ### 3. 🔒 Inspector Yardımcı Nitelikleri
-- **`[ReadOnlyField]`**: Alanları Inspector üzerinde gri (düzenlenemez) gösterir. Serileştirmeyi bozmaz ve `Unity.Collections.ReadOnly` ile isim çakışması yaşamaz.
+- **`[ReadOnlyField]`**: Alanları Inspector'da salt-okunur gösterir ve serileştirmeyi korur (`Unity.Collections.ReadOnly` ile isim çakışması yaşamaz).
 
 ---
 
@@ -87,7 +98,7 @@ using Yasin.EditorToolbox;
 
 public class SpawnerExample : MonoBehaviour
 {
-    [Header("1. Arayüze göre Prefab Filtreleme (GameObject saklar)")]
+    [Header("1. Arayüze Göre Prefab Filtreleme (GameObject saklar)")]
     [Find(typeof(IEnemy), Source = FindSource.Prefabs)]
     public GameObject enemyPrefab;
 
@@ -95,11 +106,18 @@ public class SpawnerExample : MonoBehaviour
     [Find(Source = FindSource.Prefabs | FindSource.Scene)]
     public NavMeshAgent agentReference;
 
-    [Header("3. ScriptableObject Yerinde Düzenleme")]
-    [Inline]
+    [Header("3. Ses ve Görsel Varlık Seçimi")]
+    [Find(Source = FindSource.Assets)]
+    public AudioClip spawnSfx;
+
+    [Find(Source = FindSource.Assets)]
+    public Sprite enemyIcon;
+
+    [Header("4. ScriptableObject Yerinde Düzenleme")]
+    [Inline(startExpanded: false, MaxDepth = 4)]
     public EnemyStatsSO enemyStats;
 
-    [Header("4. Salt-Okunur Bilgi Alanı")]
+    [Header("5. Salt-Okunur Bilgi Alanı")]
     [ReadOnlyField]
     public int currentSpawnCount = 0;
 }
